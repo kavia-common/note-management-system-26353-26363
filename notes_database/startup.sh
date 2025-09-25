@@ -129,19 +129,29 @@ GRANT CREATE ON SCHEMA public TO ${DB_USER};
 \dn+ public
 EOF
 
-# Apply application schema if present
-if [ -f "schema.sql" ]; then
-    echo "Applying database schema from schema.sql..."
+# Apply application schema if present (use absolute path to avoid CWD issues)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCHEMA_PATH="${SCRIPT_DIR}/schema.sql"
+
+echo "Current working directory: $(pwd)"
+echo "Resolved schema path: ${SCHEMA_PATH}"
+
+if [ -f "${SCHEMA_PATH}" ]; then
+    echo "Applying database schema from ${SCHEMA_PATH}..."
     # Run as postgres superuser to ensure ability to create extensions/triggers
-    sudo -u postgres ${PG_BIN}/psql -p ${DB_PORT} -d ${DB_NAME} -f schema.sql
+    sudo -u postgres ${PG_BIN}/psql -v ON_ERROR_STOP=1 -p ${DB_PORT} -d ${DB_NAME} -f "${SCHEMA_PATH}"
     SCHEMA_APPLY_STATUS=$?
     if [ $SCHEMA_APPLY_STATUS -eq 0 ]; then
         echo "✓ Schema applied successfully."
+        echo "Verifying created tables (public schema):"
+        sudo -u postgres ${PG_BIN}/psql -p ${DB_PORT} -d ${DB_NAME} -Atc "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY 1;"
     else
-        echo "⚠ Failed to apply schema. Please check schema.sql for errors."
+        echo "⚠ Failed to apply schema. Please check ${SCHEMA_PATH} for errors."
+        echo "Attempting to print first 50 lines of the schema for quick inspection:"
+        head -n 50 "${SCHEMA_PATH}" || true
     fi
 else
-    echo "No schema.sql found. Skipping schema application."
+    echo "No schema.sql found at ${SCHEMA_PATH}. Skipping schema application."
 fi
 
 # Save connection command to a file
