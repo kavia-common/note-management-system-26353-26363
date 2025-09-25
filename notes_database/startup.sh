@@ -129,6 +129,21 @@ GRANT CREATE ON SCHEMA public TO ${DB_USER};
 \dn+ public
 EOF
 
+# Apply application schema if present
+if [ -f "schema.sql" ]; then
+    echo "Applying database schema from schema.sql..."
+    # Run as postgres superuser to ensure ability to create extensions/triggers
+    sudo -u postgres ${PG_BIN}/psql -p ${DB_PORT} -d ${DB_NAME} -f schema.sql
+    SCHEMA_APPLY_STATUS=$?
+    if [ $SCHEMA_APPLY_STATUS -eq 0 ]; then
+        echo "✓ Schema applied successfully."
+    else
+        echo "⚠ Failed to apply schema. Please check schema.sql for errors."
+    fi
+else
+    echo "No schema.sql found. Skipping schema application."
+fi
+
 # Save connection command to a file
 echo "psql postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}" > db_connection.txt
 echo "Connection string saved to db_connection.txt"
